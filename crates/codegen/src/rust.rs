@@ -1181,7 +1181,8 @@ fn generate_module_bindings_root_file(module: &ModuleDef) -> OutputFile {
     let mut output = CodeIndenter::new(String::new(), INDENT);
     let out = &mut output;
 
-    print_file_header(out, false);
+    print_auto_generated_file_comment(out);
+    writeln!(out, "{ALLOW_LINTS}");
     out.newline();
     print_module_binding_module_decls(module, out);
     out.newline();
@@ -1260,9 +1261,6 @@ fn print_module_binding_remote_module(out: &mut Indenter) {
 #[derive(Debug)]
 pub struct RemoteModule;
 
-impl __sdk::InModule for RemoteModule {{
-    type Module = Self;
-}}
 "
     );
 }
