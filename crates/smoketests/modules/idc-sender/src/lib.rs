@@ -1,6 +1,6 @@
-#[path = "receiver_bindings/game_world/lib.rs"]
-mod game_world;
+mod remote_bindings;
 
+use remote_bindings::game_world;
 use spacetimedb::Table;
 
 #[spacetimedb::table(accessor = outbound_ping, outbox(game_world::receive_ping))]

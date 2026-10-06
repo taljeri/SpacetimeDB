@@ -53,6 +53,7 @@ fn build_generate_config_schema(command: &clap::Command) -> Result<CommandSchema
         .key(Key::new("dotnet_version").module_specific())
         .key(Key::new("include_private"))
         .key(Key::new("bindings").generate_entry_specific())
+        .key(Key::new("dependency_name").config_only().generate_entry_specific())
         .exclude("json_module")
         .exclude("force")
         .exclude("no_config")
@@ -237,16 +238,22 @@ fn dependency_generate_entry(
         anyhow::bail!("dependency `{name}` requires `database` or `module-path`");
     };
 
-    let out_dir = PathBuf::from(sender_module_path)
-        .join("src")
-        .join("receiver_bindings")
-        .join(name)
-        .to_string_lossy()
-        .into_owned();
+    let out_dir = dependency
+        .get("out-dir")
+        .and_then(|v| v.as_str())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| {
+            PathBuf::from(sender_module_path)
+                .join("src")
+                .join("remote_bindings")
+                .to_string_lossy()
+                .into_owned()
+        });
 
     Ok(HashMap::from([
         ("language".to_string(), serde_json::json!("rust")),
         ("bindings".to_string(), serde_json::json!("module")),
+        ("dependency-name".to_string(), serde_json::json!(name)),
         (source_key.to_string(), source_value),
         ("out-dir".to_string(), serde_json::json!(out_dir)),
     ]))
@@ -396,6 +403,7 @@ pub struct GenerateRunConfig {
     pub out_dir: PathBuf,
     pub include_private: bool,
     pub bindings: BindingKind,
+    pub dependency_name: Option<String>,
 }
 
 fn prepare_generate_run_configs<'a>(
@@ -479,6 +487,7 @@ fn prepare_generate_run_configs<'a>(
 
         let include_private = command_config.get_one::<bool>("include_private")?.unwrap_or(false);
         let bindings = command_config.get_one::<BindingKind>("bindings")?.unwrap_or_default();
+        let dependency_name = command_config.get_one::<String>("dependency_name")?;
 
         if bindings == BindingKind::Module && lang != Language::Rust {
             anyhow::bail!("--bindings module is only supported with --lang rust");
@@ -497,6 +506,7 @@ fn prepare_generate_run_configs<'a>(
             out_dir,
             include_private,
             bindings,
+            dependency_name,
         });
     }
 
@@ -567,6 +577,56 @@ pub fn build_generate_entry(
     entry
 }
 
+fn generate_dependency_module_files(files: Vec<OutputFile>, dependency_name: &str) -> Vec<OutputFile> {
+    files
+        .into_iter()
+        .map(|OutputFile { filename, code }| {
+            let filename = if filename == "lib.rs" {
+                format!("{dependency_name}/mod.rs")
+            } else {
+                format!("{dependency_name}/{filename}")
+            };
+            OutputFile { filename, code }
+        })
+        .collect()
+}
+
+fn write_remote_bindings_mod(out_dir: &Path, dependency_name: &str) -> anyhow::Result<()> {
+    fs::create_dir_all(out_dir)?;
+    let path = out_dir.join("mod.rs");
+    let module_decl = format!("pub mod {dependency_name};");
+
+    let mut module_decls = if path.exists() {
+        fs::read_to_string(&path)?
+            .lines()
+            .filter(|line| line.starts_with("pub mod "))
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+    } else {
+        Vec::new()
+    };
+    if !module_decls.iter().any(|line| line == &module_decl) {
+        module_decls.push(module_decl);
+        module_decls.sort();
+    }
+
+    let mut lines = vec![
+        AUTO_GENERATED_PREFIX.to_string(),
+        "// WILL NOT BE SAVED. MODIFY DEPENDENCIES IN SPACETIME.JSON INSTEAD.".to_string(),
+        String::new(),
+        "#![allow(unused, clippy::all)]".to_string(),
+        String::new(),
+    ];
+    lines.extend(module_decls);
+
+    let code = format!("{}\n", lines.join("\n"));
+    if !path.exists() || fs::read_to_string(&path)? != code {
+        println!("Writing file {}", path.display());
+        fs::write(path, code)?;
+    }
+    Ok(())
+}
+
 pub async fn run_prepared_generate_configs(
     run_configs: Vec<GenerateRunConfig>,
     extract_descriptions: ExtractDescriptions,
@@ -625,7 +685,12 @@ pub async fn run_prepared_generate_configs(
         }
 
         let generated_files: Vec<OutputFile> = if run.bindings == BindingKind::Module {
-            generate_rust_module_bindings(&module)
+            let files = generate_rust_module_bindings(&module);
+            if let Some(dependency_name) = &run.dependency_name {
+                generate_dependency_module_files(files, dependency_name)
+            } else {
+                files
+            }
         } else {
             let csharp_lang;
             let unreal_cpp_lang;
@@ -650,6 +715,10 @@ pub async fn run_prepared_generate_configs(
             generate(&module, gen_lang, &options)
         };
 
+        if let Some(dependency_name) = &run.dependency_name {
+            write_remote_bindings_mod(&run.out_dir, dependency_name)?;
+        }
+
         for OutputFile { filename, code } in generated_files {
             let fname = Path::new(&filename);
             if let Some(parent) = fname.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -664,9 +733,10 @@ pub async fn run_prepared_generate_configs(
             paths.insert(path);
         }
 
-        let cleanup_root = match run.lang {
-            Language::UnrealCpp => run.out_dir.join("Source").join(run.module_name.as_ref().unwrap()),
-            _ => run.out_dir.clone(),
+        let cleanup_root = match (&run.dependency_name, run.lang) {
+            (Some(dependency_name), _) => run.out_dir.join(dependency_name),
+            (None, Language::UnrealCpp) => run.out_dir.join("Source").join(run.module_name.as_ref().unwrap()),
+            (None, _) => run.out_dir.clone(),
         };
 
         let mut auto_generated_buf: [u8; AUTO_GENERATED_PREFIX.len()] = [0; AUTO_GENERATED_PREFIX.len()];
@@ -1116,7 +1186,11 @@ mod tests {
         );
         assert_eq!(
             filtered[0].get_one::<PathBuf>("out_dir").unwrap(),
-            Some(PathBuf::from("./lobby/src/receiver_bindings/game_world"))
+            Some(PathBuf::from("./lobby/src/remote_bindings"))
+        );
+        assert_eq!(
+            filtered[0].get_one::<String>("dependency_name").unwrap(),
+            Some("game_world".to_string())
         );
         assert_eq!(
             filtered[1].get_one::<PathBuf>("module_path").unwrap(),
@@ -1124,7 +1198,11 @@ mod tests {
         );
         assert_eq!(
             filtered[1].get_one::<PathBuf>("out_dir").unwrap(),
-            Some(PathBuf::from("./lobby/src/receiver_bindings/auth"))
+            Some(PathBuf::from("./lobby/src/remote_bindings"))
+        );
+        assert_eq!(
+            filtered[1].get_one::<String>("dependency_name").unwrap(),
+            Some("auth".to_string())
         );
     }
 

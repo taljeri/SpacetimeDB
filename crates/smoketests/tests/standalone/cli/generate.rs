@@ -211,7 +211,11 @@ fn cli_generate_receiver_bindings_from_dependency_compile_in_sender() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let generated = sender_dir.join("src/receiver_bindings/game_world/lib.rs");
+    let remote_bindings_mod = std::fs::read_to_string(sender_dir.join("src/remote_bindings/mod.rs"))
+        .expect("generated remote_bindings mod.rs should exist");
+    assert!(remote_bindings_mod.contains("pub mod game_world;"));
+
+    let generated = sender_dir.join("src/remote_bindings/game_world/mod.rs");
     let root = std::fs::read_to_string(&generated).expect("generated receiver binding should exist");
     assert!(root.contains("pub struct Identity(pub spacetimedb::Identity);"));
     assert!(root.contains("impl spacetimedb::rt::FnInfo for receive_ping"));
