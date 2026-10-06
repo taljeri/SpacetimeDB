@@ -26,6 +26,14 @@ const INDENT: &str = "    ";
 
 pub struct Rust;
 
+pub fn generate_rust_module_bindings(module: &ModuleDef) -> Vec<OutputFile> {
+    itertools::chain!(
+        iter_types(module).flat_map(|typ| Rust.generate_type_files(module, typ)),
+        [generate_module_bindings_root_file(module)],
+    )
+    .collect()
+}
+
 impl Lang for Rust {
     fn generate_type_files(&self, module: &ModuleDef, typ: &TypeDef) -> Vec<OutputFile> {
         let type_name = collect_case(Case::Pascal, typ.accessor_name.name_segments());
@@ -1167,6 +1175,118 @@ fn define_struct_for_product(
     );
 
     out.newline();
+}
+
+fn generate_module_bindings_root_file(module: &ModuleDef) -> OutputFile {
+    let mut output = CodeIndenter::new(String::new(), INDENT);
+    let out = &mut output;
+
+    print_file_header(out, false);
+    out.newline();
+    print_module_binding_module_decls(module, out);
+    out.newline();
+    print_module_binding_reexports(module, out);
+    out.newline();
+    print_module_binding_identity(out);
+    out.newline();
+    print_module_binding_remote_module(out);
+    out.newline();
+    print_module_binding_reducer_stub(out);
+    out.newline();
+    for reducer in iter_reducers(module, CodegenVisibility::OnlyPublic) {
+        print_module_binding_reducer_handle(out, reducer);
+        out.newline();
+    }
+
+    OutputFile {
+        filename: "lib.rs".to_owned(),
+        code: output.into_inner(),
+    }
+}
+
+fn print_module_binding_module_decls(module: &ModuleDef, out: &mut Indenter) {
+    for ty in iter_types(module) {
+        let mod_name = type_module_name(&ty.accessor_name);
+        writeln!(out, "pub mod {mod_name};");
+    }
+}
+
+fn print_module_binding_reexports(module: &ModuleDef, out: &mut Indenter) {
+    for ty in iter_types(module) {
+        let mod_name = type_module_name(&ty.accessor_name);
+        let type_name = collect_case(Case::Pascal, ty.accessor_name.name_segments());
+        writeln!(out, "pub use {mod_name}::{type_name};");
+    }
+}
+
+fn print_module_binding_identity(out: &mut Indenter) {
+    writeln!(
+        out,
+        "
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct Identity(pub spacetimedb::Identity);
+"
+    );
+}
+
+fn print_module_binding_remote_module(out: &mut Indenter) {
+    writeln!(
+        out,
+        "
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct RemoteModule;
+
+impl __sdk::InModule for RemoteModule {{
+    type Module = Self;
+}}
+"
+    );
+}
+
+fn print_module_binding_reducer_stub(out: &mut Indenter) {
+    writeln!(
+        out,
+        "
+fn __remote_reducer_stub(_: &spacetimedb::ReducerContext, _: &[u8]) -> spacetimedb::ReducerResult {{
+    unreachable!(\"remote receiver binding reducer handles are metadata only\")
+}}
+"
+    );
+}
+
+fn print_module_binding_reducer_handle(out: &mut Indenter, reducer: &ReducerDef) {
+    let handle_name = reducer_function_name(reducer);
+    let reducer_name = rust_string_literal(reducer.name.deref());
+    let arg_names = reducer
+        .params_for_generate
+        .elements
+        .iter()
+        .map(|(arg, _)| format!("Some({})", rust_string_literal(arg.deref())))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    writeln!(
+        out,
+        "
+#[allow(non_camel_case_types)]
+pub struct {handle_name};
+
+impl spacetimedb::rt::ExplicitNames for {handle_name} {{}}
+
+impl spacetimedb::rt::FnInfo for {handle_name} {{
+    type Invoke = spacetimedb::rt::ReducerFn;
+    type FnKind = spacetimedb::rt::FnKindReducer;
+    const NAME: &'static str = {reducer_name};
+    const ARG_NAMES: &'static [Option<&'static str>] = &[{arg_names}];
+    const INVOKE: Self::Invoke = __remote_reducer_stub;
+}}
+"
+    );
+}
+
+fn rust_string_literal(value: &str) -> String {
+    format!("{value:?}")
 }
 
 fn type_ref_module_name(module: &ModuleDef, type_ref: AlgebraicTypeRef) -> String {
