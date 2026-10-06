@@ -146,8 +146,6 @@ pub enum ValidationError {
     MultipleColumnDefaultValues { table: RawIdentifier, col_id: ColId },
     #[error("Table {table} not found")]
     TableNotFound { table: RawIdentifier },
-    #[error("table {table} is assigned in multiple outboxes")]
-    DuplicateOutbox { table: Identifier },
     #[error("outbox table {table} must have a primary key")]
     OutboxMissingPrimaryKey { table: Identifier },
     #[error("outbox table {table} primary key must be u64, found {found}")]
@@ -180,6 +178,15 @@ pub enum ValidationError {
     DuplicateLifeCycle { lifecycle: Lifecycle },
     #[error("table {table} is assigned in multiple schedules")]
     DuplicateSchedule { table: Identifier },
+    #[error("table {table} is assigned in multiple outbox definitions")]
+    DuplicateOutbox { table: Identifier },
+    #[error("outbox table {} not found", table_name)]
+    MissingOutboxTable { table_name: RawIdentifier },
+    #[error("on_result reducer {reducer_name} for outbox {table} does not exist")]
+    MissingOutboxOnResult {
+        table: Identifier,
+        reducer_name: RawIdentifier,
+    },
     #[error("table {} corresponding to schedule {} not found", table_name, schedule_name)]
     MissingScheduleTable {
         table_name: RawIdentifier,

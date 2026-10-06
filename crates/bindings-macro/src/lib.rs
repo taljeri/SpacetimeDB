@@ -160,6 +160,7 @@ mod sym {
     symbol!(sats);
     symbol!(scheduled);
     symbol!(outbox);
+    symbol!(on_result);
     symbol!(target);
     symbol!(unique);
     symbol!(update);

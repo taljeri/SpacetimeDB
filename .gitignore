@@ -267,3 +267,6 @@ nul
 
 # Any local file
 *.local
+
+# Local IDC manual testing fixture.
+/manual/idc-two-modules/

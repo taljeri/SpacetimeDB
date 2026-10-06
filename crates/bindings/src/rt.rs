@@ -168,6 +168,8 @@ pub trait FnInfo: ExplicitNames {
     /// Currently only views use this metadata.
     const VIEW_PRIMARY_KEY_COLUMNS: &'static [&'static str] = &[];
 
+    const ON_RESULT_OUTBOX: Option<&'static str> = None;
+
     /// The function to invoke.
     const INVOKE: Self::Invoke;
 
@@ -794,6 +796,16 @@ pub fn register_table<T: Table>() {
 
         table.finish();
 
+        if let Some(outbox) = T::OUTBOX {
+            module.inner.add_outbox(
+                T::TABLE_NAME,
+                outbox.remote_reducer_name,
+                outbox.target_column,
+                None::<&str>,
+                outbox.signature_hash.map(str::to_owned),
+            );
+        }
+
         module.inner.add_explicit_names(T::explicit_names());
     })
 }
@@ -820,6 +832,9 @@ pub fn register_reducer<'a, A: Args<'a>, I: FnInfo<Invoke = ReducerFn>>(_: impl 
             module.inner.add_lifecycle_reducer(lifecycle, I::NAME, params);
         } else {
             module.inner.add_reducer(I::NAME, params);
+        }
+        if let Some(outbox_table) = I::ON_RESULT_OUTBOX {
+            module.on_result_reducers.push((outbox_table, I::NAME));
         }
         module.reducers.push(I::INVOKE);
 
@@ -1032,6 +1047,7 @@ pub struct ModuleBuilder {
     views: Vec<ViewFn>,
     /// The anonymous views of the module.
     views_anon: Vec<AnonymousFn>,
+    on_result_reducers: Vec<(&'static str, &'static str)>,
 }
 
 // Not actually a mutex; because WASM is single-threaded this basically just turns into a refcell.
@@ -1079,6 +1095,10 @@ extern "C" fn __describe_module__(description: BytesSink) {
     let mut module = ModuleBuilder::default();
     for describer in &mut *DESCRIBERS.lock().unwrap() {
         describer(&mut module)
+    }
+
+    for (outbox_table, reducer) in module.on_result_reducers {
+        module.inner.set_outbox_on_result(outbox_table, reducer);
     }
 
     // Serialize the module to bsatn.
