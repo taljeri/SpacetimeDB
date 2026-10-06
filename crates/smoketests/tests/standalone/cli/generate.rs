@@ -1,10 +1,17 @@
 use predicates::prelude::*;
 use spacetimedb_guard::ensure_binaries_built;
-use spacetimedb_smoketests::patch_module_cargo_to_local_bindings;
+use spacetimedb_smoketests::{patch_module_cargo_to_local_bindings, workspace_root};
 use std::process::Command;
 
 fn cli_cmd() -> Command {
     Command::new(ensure_binaries_built())
+}
+
+fn copy_module_fixture(name: &str, dest: &std::path::Path) {
+    let source = workspace_root().join("crates/smoketests/modules").join(name);
+    std::fs::create_dir_all(dest.join("src")).expect("failed to create copied module src dir");
+    std::fs::copy(source.join("Cargo.toml"), dest.join("Cargo.toml")).expect("failed to copy Cargo.toml");
+    std::fs::copy(source.join("src/lib.rs"), dest.join("src/lib.rs")).expect("failed to copy lib.rs");
 }
 
 /// Standalone-only: this builds a local module and generates bindings without contacting a server.
@@ -162,73 +169,13 @@ fn cli_generate_rust_module_bindings() {
 #[test]
 fn cli_generate_receiver_bindings_from_dependency_compile_in_sender() {
     let temp_dir = tempfile::tempdir().expect("failed to create temp dir");
-    let receiver_project = temp_dir.path().join("receiver");
-    let sender_project = temp_dir.path().join("sender");
+    let receiver_dir = temp_dir.path().join("receiver");
+    let sender_dir = temp_dir.path().join("sender");
 
-    for (project_path, project_name) in [
-        (&receiver_project, "receiver-project"),
-        (&sender_project, "sender-project"),
-    ] {
-        let output = cli_cmd()
-            .args([
-                "init",
-                "--non-interactive",
-                "--lang",
-                "rust",
-                "--project-path",
-                project_path.to_str().unwrap(),
-                project_name,
-            ])
-            .current_dir(temp_dir.path())
-            .output()
-            .expect("failed to execute");
-        assert!(
-            output.status.success(),
-            "init failed for {project_name}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    let receiver_dir = receiver_project.join("spacetimedb");
-    let sender_dir = sender_project.join("spacetimedb");
+    copy_module_fixture("idc-receiver", &receiver_dir);
+    copy_module_fixture("idc-sender", &sender_dir);
     patch_module_cargo_to_local_bindings(&receiver_dir).expect("failed to patch receiver Cargo.toml");
     patch_module_cargo_to_local_bindings(&sender_dir).expect("failed to patch sender Cargo.toml");
-
-    std::fs::write(
-        receiver_dir.join("src/lib.rs"),
-        r#"#[spacetimedb::reducer]
-pub fn receive_ping(_ctx: &spacetimedb::ReducerContext, _target: spacetimedb::Identity, _body: String) {}
-"#,
-    )
-    .expect("failed to write receiver module");
-
-    std::fs::write(
-        sender_dir.join("src/lib.rs"),
-        r#"#[path = "receiver_bindings/game_world/lib.rs"]
-mod game_world;
-
-use spacetimedb::Table;
-
-#[spacetimedb::table(accessor = outbound_ping, outbox(game_world::receive_ping))]
-pub struct OutboundPing {
-    #[primary_key]
-    #[auto_inc]
-    id: u64,
-    target: game_world::Identity,
-    body: String,
-}
-
-#[spacetimedb::reducer]
-pub fn enqueue_ping(ctx: &spacetimedb::ReducerContext, target: spacetimedb::Identity, body: String) {
-    ctx.db.outbound_ping().insert(OutboundPing {
-        id: 0,
-        target: game_world::Identity(target),
-        body,
-    });
-}
-"#,
-    )
-    .expect("failed to write sender module");
 
     std::fs::write(
         temp_dir.path().join("spacetime.json"),
@@ -237,11 +184,11 @@ pub fn enqueue_ping(ctx: &spacetimedb::ReducerContext, target: spacetimedb::Iden
   "children": [
     {
       "database": "game-world",
-      "module-path": "./receiver/spacetimedb"
+      "module-path": "./receiver"
     },
     {
       "database": "lobby",
-      "module-path": "./sender/spacetimedb",
+      "module-path": "./sender",
       "dependencies": [
         { "name": "game_world", "database": "game-world" }
       ]
