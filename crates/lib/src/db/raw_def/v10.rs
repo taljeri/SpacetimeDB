@@ -694,6 +694,14 @@ impl RawModuleDefV10 {
         })
     }
 
+    /// Get the outboxes section, if present.
+    pub fn outboxes(&self) -> Option<&Vec<RawOutboxDefV10>> {
+        self.sections.iter().find_map(|s| match s {
+            RawModuleDefV10Section::Outboxes(outboxes) => Some(outboxes),
+            _ => None,
+        })
+    }
+
     /// Get the lifecycle reducers section, if present.
     pub fn lifecycle_reducers(&self) -> Option<&Vec<RawLifeCycleReducerDefV10>> {
         self.sections.iter().find_map(|s| match s {
@@ -710,14 +718,6 @@ impl RawModuleDefV10 {
                 _ => None,
             })
             .expect("Tables section must exist for tests")
-    }
-
-    /// Get the outboxes section, if present.
-    pub fn outboxes(&self) -> Option<&Vec<RawOutboxDefV10>> {
-        self.sections.iter().find_map(|s| match s {
-            RawModuleDefV10Section::Outboxes(outboxes) => Some(outboxes),
-            _ => None,
-        })
     }
 
     // Get the row-level security section, if present.

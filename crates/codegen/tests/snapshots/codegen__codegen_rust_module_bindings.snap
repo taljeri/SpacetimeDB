@@ -100,6 +100,10 @@ impl spacetimedb::rt::RemoteReducer for add {
     type Args = AddArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for add {
+    type Args = (String, u8,);
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -115,6 +119,10 @@ impl spacetimedb::rt::RemoteReducer for add_player {
     const NAME: &'static str = "add_player";
     const ARG_NAMES: &'static [&'static str] = &["name"];
     type Args = AddPlayerArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for add_player {
+    type Args = (String,);
 }
 
 
@@ -134,6 +142,10 @@ impl spacetimedb::rt::RemoteReducer for add_private {
     type Args = AddPrivateArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for add_private {
+    type Args = (String,);
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -148,6 +160,10 @@ impl spacetimedb::rt::RemoteReducer for assert_caller_identity_is_module_identit
     const NAME: &'static str = "assert_caller_identity_is_module_identity";
     const ARG_NAMES: &'static [&'static str] = &[];
     type Args = AssertCallerIdentityIsModuleIdentityArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for assert_caller_identity_is_module_identity {
+    type Args = ();
 }
 
 
@@ -167,6 +183,10 @@ impl spacetimedb::rt::RemoteReducer for delete_player {
     type Args = DeletePlayerArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for delete_player {
+    type Args = (u64,);
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -182,6 +202,10 @@ impl spacetimedb::rt::RemoteReducer for delete_players_by_name {
     const NAME: &'static str = "delete_players_by_name";
     const ARG_NAMES: &'static [&'static str] = &["name"];
     type Args = DeletePlayersByNameArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for delete_players_by_name {
+    type Args = (String,);
 }
 
 
@@ -202,6 +226,10 @@ impl spacetimedb::rt::RemoteReducer for expect_environment {
     type Args = ExpectEnvironmentArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for expect_environment {
+    type Args = (String, Option::<String>,);
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -217,6 +245,10 @@ impl spacetimedb::rt::RemoteReducer for list_over_age {
     const NAME: &'static str = "list_over_age";
     const ARG_NAMES: &'static [&'static str] = &["age"];
     type Args = ListOverAgeArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for list_over_age {
+    type Args = (u8,);
 }
 
 
@@ -235,6 +267,10 @@ impl spacetimedb::rt::RemoteReducer for log_module_identity {
     type Args = LogModuleIdentityArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for log_module_identity {
+    type Args = ();
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -251,6 +287,10 @@ impl spacetimedb::rt::RemoteReducer for query_private {
     type Args = QueryPrivateArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for query_private {
+    type Args = ();
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -265,6 +305,10 @@ impl spacetimedb::rt::RemoteReducer for say_hello {
     const NAME: &'static str = "say_hello";
     const ARG_NAMES: &'static [&'static str] = &[];
     type Args = SayHelloArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for say_hello {
+    type Args = ();
 }
 
 
@@ -287,6 +331,10 @@ impl spacetimedb::rt::RemoteReducer for test {
     type Args = TestArgs;
 }
 
+impl spacetimedb::rt::RemoteReducer for test {
+    type Args = (TestA, TestB, NamespaceTestC, NamespaceTestF,);
+}
+
 
 #[derive(__lib::ser::Serialize, __lib::de::Deserialize, Clone, PartialEq, Debug)]
 #[sats(crate = __lib)]
@@ -301,4 +349,8 @@ impl spacetimedb::rt::RemoteReducer for test_btree_index_args {
     const NAME: &'static str = "test_btree_index_args";
     const ARG_NAMES: &'static [&'static str] = &[];
     type Args = TestBtreeIndexArgsArgs;
+}
+
+impl spacetimedb::rt::RemoteReducer for test_btree_index_args {
+    type Args = ();
 }

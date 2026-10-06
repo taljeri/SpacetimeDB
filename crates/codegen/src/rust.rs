@@ -972,6 +972,44 @@ pub fn type_name(module: &ModuleDef, ty: &AlgebraicTypeUse) -> String {
     s
 }
 
+fn write_module_binding_type<W: Write>(module: &ModuleDef, out: &mut W, ty: &AlgebraicTypeUse) -> fmt::Result {
+    match ty {
+        AlgebraicTypeUse::Identity => write!(out, "spacetimedb::Identity")?,
+        AlgebraicTypeUse::ConnectionId => write!(out, "spacetimedb::ConnectionId")?,
+        AlgebraicTypeUse::Timestamp => write!(out, "spacetimedb::Timestamp")?,
+        AlgebraicTypeUse::TimeDuration => write!(out, "spacetimedb::TimeDuration")?,
+        AlgebraicTypeUse::Uuid => write!(out, "spacetimedb::Uuid")?,
+        AlgebraicTypeUse::ScheduleAt => write!(out, "spacetimedb::ScheduleAt")?,
+        AlgebraicTypeUse::Primitive(PrimitiveType::I256) => write!(out, "spacetimedb::sats::i256")?,
+        AlgebraicTypeUse::Primitive(PrimitiveType::U256) => write!(out, "spacetimedb::sats::u256")?,
+        AlgebraicTypeUse::Option(inner_ty) => {
+            write!(out, "Option::<")?;
+            write_module_binding_type(module, out, inner_ty)?;
+            write!(out, ">")?;
+        }
+        AlgebraicTypeUse::Result { ok_ty, err_ty } => {
+            write!(out, "Result::<")?;
+            write_module_binding_type(module, out, ok_ty)?;
+            write!(out, ", ")?;
+            write_module_binding_type(module, out, err_ty)?;
+            write!(out, ">")?;
+        }
+        AlgebraicTypeUse::Array(elem_ty) => {
+            write!(out, "Vec::<")?;
+            write_module_binding_type(module, out, elem_ty)?;
+            write!(out, ">")?;
+        }
+        _ => write_type(module, out, ty)?,
+    }
+    Ok(())
+}
+
+fn module_binding_type_name(module: &ModuleDef, ty: &AlgebraicTypeUse) -> String {
+    let mut s = String::new();
+    write_module_binding_type(module, &mut s, ty).unwrap();
+    s
+}
+
 /// Arguments to a reducer or procedure pretty-printed in various ways that are convenient to compute together.
 struct FormattedArglist {
     /// The arguments as `ident: ty, ident: ty, ident: ty,`,
@@ -1278,7 +1316,6 @@ fn print_module_binding_reducer_handle(module: &ModuleDef, out: &mut Indenter, r
         .map(|(arg, _)| rust_string_literal(arg.deref()))
         .collect::<Vec<_>>()
         .join(", ");
-
     writeln!(
         out,
         "
