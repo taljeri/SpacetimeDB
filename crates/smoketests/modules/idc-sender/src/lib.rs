@@ -8,6 +8,7 @@ pub struct OutboundPing {
     #[primary_key]
     #[auto_inc]
     id: u64,
+    #[target]
     target: game_world::Identity,
     body: String,
 }
