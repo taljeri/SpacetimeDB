@@ -747,6 +747,7 @@ mod tests {
             durability: DurabilityConfig::default(),
             websocket: WebSocketOptions::default(),
             module_http: ModuleHttpConfig::default(),
+            idc_http_port: None,
             wasm: WasmConfig::default(),
             v8: V8Config::default(),
         };
