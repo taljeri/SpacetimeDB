@@ -8,6 +8,7 @@ use crate::util::{
 use crate::CodegenOptions;
 use crate::OutputFile;
 use convert_case::{Case, Casing};
+use spacetimedb_lib::hash_bytes;
 use spacetimedb_lib::sats::layout::PrimitiveType;
 use spacetimedb_lib::sats::AlgebraicTypeRef;
 use spacetimedb_schema::def::{ModuleDef, ProcedureDef, ReducerDef, ScopedTypeName, TableDef, TypeDef};
@@ -1316,6 +1317,7 @@ fn print_module_binding_reducer_handle(module: &ModuleDef, out: &mut Indenter, r
         .map(|(arg, _)| rust_string_literal(arg.deref()))
         .collect::<Vec<_>>()
         .join(", ");
+    let signature_hash = rust_string_literal(&reducer_signature_hash(module, reducer));
     writeln!(
         out,
         "
@@ -1325,10 +1327,23 @@ pub struct {handle_name};
 impl spacetimedb::rt::RemoteReducer for {handle_name} {{
     const NAME: &'static str = {reducer_name};
     const ARG_NAMES: &'static [&'static str] = &[{arg_names}];
+    const SIGNATURE_HASH: &'static str = {signature_hash};
     type Args = {args_type};
 }}
 "
     );
+}
+
+fn reducer_signature_hash(module: &ModuleDef, reducer: &ReducerDef) -> String {
+    let mut sig = String::from("spacetimedb::idc::reducer_signature::v1\0");
+    sig.push_str(reducer.name.deref());
+    for (name, ty) in &reducer.params_for_generate.elements {
+        sig.push('\0');
+        sig.push_str(name.deref());
+        sig.push(':');
+        sig.push_str(&module_binding_type_name(module, ty));
+    }
+    hash_bytes(sig.as_bytes()).to_hex().to_string()
 }
 
 fn rust_string_literal(value: &str) -> String {

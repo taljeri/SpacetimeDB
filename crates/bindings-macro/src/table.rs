@@ -2,7 +2,7 @@ use crate::sats;
 use crate::sym;
 use crate::util::{check_duplicate, check_duplicate_msg, match_meta};
 use core::slice;
-use heck::{ToSnakeCase, ToUpperCamelCase};
+use heck::ToSnakeCase;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote, quote_spanned, ToTokens};
 use std::borrow::Cow;
@@ -1181,12 +1181,6 @@ pub(crate) fn table_impl(mut args: TableArgs, item: &syn::DeriveInput) -> syn::R
         .iter()
         .map(|outbox| {
             let receiver_reducer = &outbox.receiver_reducer;
-            let receiver_args_ty = {
-                let mut path = receiver_reducer.clone();
-                let last = path.segments.last_mut().expect("receiver reducer path cannot be empty");
-                last.ident = format_ident!("{}Args", last.ident.to_string().to_upper_camel_case());
-                path
-            };
             let Some((target_column, _)) = &outbox_target_column else {
                 return Err(syn::Error::new_spanned(
                     receiver_reducer,
@@ -1203,33 +1197,14 @@ pub(crate) fn table_impl(mut args: TableArgs, item: &syn::DeriveInput) -> syn::R
                 ));
             }
             receiver_identity.segments.push(parse_quote!(Identity));
-            let outbox_arg_fields = columns.iter().filter_map(|column| {
-                if primary_key_column
-                    .as_ref()
-                    .is_some_and(|primary_key| primary_key.ident == column.ident)
-                {
-                    return None;
-                }
-                let ident = column.ident;
-                if column.ident == target_column.ident {
-                    Some(quote! { #ident: __row.#ident.0 })
-                } else {
-                    Some(quote! { #ident: __row.#ident })
-                }
-            });
-
             Ok(quote! {
                 const fn __outbox_receiver_typecheck<R: spacetimedb::rt::RemoteReducer>() {
                     let _ = R::NAME;
                     let _ = R::ARG_NAMES;
+                    let _ = R::SIGNATURE_HASH;
                 }
                 __outbox_receiver_typecheck::<#receiver_reducer>();
                 let _ = |x: #target_ty| { let _: #receiver_identity = x; };
-                let _ = |__row: #original_struct_ident| {
-                    let _: <#receiver_reducer as spacetimedb::rt::RemoteReducer>::Args = #receiver_args_ty {
-                        #(#outbox_arg_fields,)*
-                    };
-                };
             })
         })
         .collect::<syn::Result<Vec<_>>>()?;
@@ -1241,8 +1216,9 @@ pub(crate) fn table_impl(mut args: TableArgs, item: &syn::DeriveInput) -> syn::R
             quote! {
                 const OUTBOX: Option<spacetimedb::table::OutboxDesc<'static>> = Some(spacetimedb::table::OutboxDesc {
                     remote_reducer_name: <#receiver_reducer as spacetimedb::rt::RemoteReducer>::NAME,
+                    remote_arg_names: <#receiver_reducer as spacetimedb::rt::RemoteReducer>::ARG_NAMES,
                     target_column: #target_col,
-                    signature_hash: None,
+                    signature_hash: Some(<#receiver_reducer as spacetimedb::rt::RemoteReducer>::SIGNATURE_HASH),
                 });
             }
         }
@@ -1261,6 +1237,7 @@ pub(crate) fn table_impl(mut args: TableArgs, item: &syn::DeriveInput) -> syn::R
     };
 
     let field_types = fields.iter().map(|f| f.ty).collect::<Vec<_>>();
+    let column_names = columns.iter().map(|col| col.ident.to_string()).collect::<Vec<_>>();
 
     let tabletype_impl = quote! {
         use spacetimedb::Serialize;
@@ -1277,6 +1254,7 @@ pub(crate) fn table_impl(mut args: TableArgs, item: &syn::DeriveInput) -> syn::R
             // the default value if not specified is Private
             #(const TABLE_ACCESS: spacetimedb::table::TableAccess = #table_access;)*
             #(#is_event)*
+            const COLUMN_NAMES: &'static [&'static str] = &[#(#column_names),*];
             const UNIQUE_COLUMNS: &'static [u16] = &[#(#unique_col_ids),*];
             const INDEXES: &'static [spacetimedb::table::IndexDesc<'static>] = &[#(#index_descs),*];
             #(const PRIMARY_KEY: Option<u16> = Some(#primary_col_id);)*

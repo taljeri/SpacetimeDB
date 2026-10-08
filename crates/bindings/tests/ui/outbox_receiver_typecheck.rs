@@ -39,6 +39,7 @@ mod receiver {
     impl spacetimedb::rt::RemoteReducer for receive_ping {
         const NAME: &'static str = "receive_ping";
         const ARG_NAMES: &'static [&'static str] = &["target", "body"];
+        const SIGNATURE_HASH: &'static str = "test-signature";
         type Args = ReceivePingArgs;
     }
 }
@@ -48,9 +49,9 @@ pub struct OutboundPing {
     #[primary_key]
     #[auto_inc]
     id: u64,
-    body: u8,
+    body: String,
     #[target]
-    target: receiver::Identity,
+    target: u8,
 }
 
 fn main() {}
