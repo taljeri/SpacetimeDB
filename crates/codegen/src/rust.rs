@@ -1191,10 +1191,8 @@ fn generate_module_bindings_root_file(module: &ModuleDef) -> OutputFile {
     out.newline();
     print_module_binding_remote_module(out);
     out.newline();
-    print_module_binding_reducer_stub(out);
-    out.newline();
     for reducer in iter_reducers(module, CodegenVisibility::OnlyPublic) {
-        print_module_binding_reducer_handle(out, reducer);
+        print_module_binding_reducer_handle(module, out, reducer);
         out.newline();
     }
 
@@ -1244,25 +1242,17 @@ impl __sdk::InModule for RemoteModule {{
     );
 }
 
-fn print_module_binding_reducer_stub(out: &mut Indenter) {
-    writeln!(
-        out,
-        "
-fn __remote_reducer_stub(_: &spacetimedb::ReducerContext, _: &[u8]) -> spacetimedb::ReducerResult {{
-    unreachable!(\"remote receiver binding reducer handles are metadata only\")
-}}
-"
-    );
-}
-
-fn print_module_binding_reducer_handle(out: &mut Indenter, reducer: &ReducerDef) {
+fn print_module_binding_reducer_handle(module: &ModuleDef, out: &mut Indenter, reducer: &ReducerDef) {
     let handle_name = reducer_function_name(reducer);
     let reducer_name = rust_string_literal(reducer.name.deref());
+    let args_type = function_args_type_name(&reducer.accessor_name);
+    define_struct_for_product(module, out, &args_type, &reducer.params_for_generate.elements, "pub");
+    out.newline();
     let arg_names = reducer
         .params_for_generate
         .elements
         .iter()
-        .map(|(arg, _)| format!("Some({})", rust_string_literal(arg.deref())))
+        .map(|(arg, _)| rust_string_literal(arg.deref()))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -1272,14 +1262,10 @@ fn print_module_binding_reducer_handle(out: &mut Indenter, reducer: &ReducerDef)
 #[allow(non_camel_case_types)]
 pub struct {handle_name};
 
-impl spacetimedb::rt::ExplicitNames for {handle_name} {{}}
-
-impl spacetimedb::rt::FnInfo for {handle_name} {{
-    type Invoke = spacetimedb::rt::ReducerFn;
-    type FnKind = spacetimedb::rt::FnKindReducer;
+impl spacetimedb::rt::RemoteReducer for {handle_name} {{
     const NAME: &'static str = {reducer_name};
-    const ARG_NAMES: &'static [Option<&'static str>] = &[{arg_names}];
-    const INVOKE: Self::Invoke = __remote_reducer_stub;
+    const ARG_NAMES: &'static [&'static str] = &[{arg_names}];
+    type Args = {args_type};
 }}
 "
     );

@@ -59,9 +59,9 @@ fn test_codegen_rust_module_bindings() {
 
     assert!(root.contains("pub struct Identity(pub spacetimedb::Identity);"));
     assert!(root.contains("pub struct add;"));
-    assert!(root.contains("impl spacetimedb::rt::FnInfo for add"));
+    assert!(root.contains("impl spacetimedb::rt::RemoteReducer for add"));
     assert!(root.contains("const NAME: &'static str = \"add\";"));
-    assert!(root.contains("const ARG_NAMES: &'static [Option<&'static str>] = &[Some(\"name\"), Some(\"age\")];"));
+    assert!(root.contains("const ARG_NAMES: &'static [&'static str] = &[\"name\", \"age\"];"));
     assert!(!root.contains("pub struct init;"));
     assert!(!root.contains("pub struct client_connected;"));
     assert!(!root.contains("sleep_one_second"));
