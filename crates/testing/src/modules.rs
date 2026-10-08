@@ -405,7 +405,6 @@ impl CompiledModule {
                 durability: Default::default(),
                 websocket: WebSocketOptions::default(),
                 module_http: Default::default(),
-                idc_http_port: None,
                 wasm: Default::default(),
                 v8: Default::default(),
             },
